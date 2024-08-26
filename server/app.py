@@ -8,6 +8,9 @@ app.config.from_object('config.Config')
 db.init_app(app)
 migrate.init_app(app, db)
 
+# Initialize a cache for popularity scores
+popularity_cache = {}
+
 class ArtistAPI:
     @staticmethod
     @app.route('/artists', methods=['POST'])
@@ -62,6 +65,7 @@ class SongAPI:
     def get_song(song_id):
         song = Song.query.get_or_404(str(song_id))
         artist = song.artist
+        popularity_score = calculate_popularity(song)  # Use cached value if available
         return jsonify({
             'id': str(song.id),
             'title': song.title,
@@ -69,7 +73,7 @@ class SongAPI:
             'plays': song.plays,
             'likes': song.likes,
             'shares': song.shares,
-            'popularity_score': calculate_popularity(song),
+            'popularity_score': popularity_score,
             'artist': {'id': str(artist.id), 'name': artist.name}
         })
 
@@ -86,11 +90,15 @@ class SongAPI:
         song.shares = data.get('shares', song.shares)
 
         db.session.commit()
-        calculate_popularity(song)
+
+        # Invalidate the cache for this song's popularity score
+        popularity_cache[song.id] = calculate_popularity(song)
+
         return jsonify({
             'message': 'Song updated successfully',
-            'popularity_score': song.popularity_score
+            'popularity_score': popularity_cache[song.id]
         })
+    
     @staticmethod
     @app.route('/songs', methods=['GET'])
     def get_all_songs():
@@ -109,21 +117,21 @@ class SongAPI:
 def resource_not_found(e):
     return jsonify(error=str(e)), 404
 
-# @app.errorhandler(500)
-# def internal_server_error(e):
-#     return jsonify(error='An unexpected error occurred'), 500
-
 @app.errorhandler(500)
 def internal_server_error(e):
     app.logger.error(f"Server Error: {e}, Route: {request.url}")
     return jsonify(error='An unexpected error occurred'), 500
 
 def calculate_popularity(song):
-    """Calculate and store the popularity score."""
-    if song.popularity_score == 0.0:
-        song.popularity_score = (song.plays * 0.5) + (song.likes * 0.3) + (song.shares * 0.2)
-        db.session.commit()
-    return song.popularity_score
+    """Calculate and store the popularity score, using a cache for optimization."""
+    if song.id in popularity_cache:
+        return popularity_cache[song.id]
+
+    # Calculate the popularity score if not already in cache
+    score = (song.plays * 0.5) + (song.likes * 0.3) + (song.shares * 0.2)
+    popularity_cache[song.id] = score
+
+    return score
 
 if __name__ == '__main__':
     app.run(debug=True)
