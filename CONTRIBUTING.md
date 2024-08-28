@@ -1,3 +1,4 @@
+
 # Contributing to Learn.co Curriculum
 
 We're really exited that you're about to contribute to the [open
