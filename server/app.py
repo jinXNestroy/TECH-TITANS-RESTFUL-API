@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from database import db, migrate
-from models import Artist, Song
+from api import ArtistAPI, SongAPI
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -11,107 +11,19 @@ migrate.init_app(app, db)
 # Initialize a cache for popularity scores
 popularity_cache = {}
 
-class ArtistAPI:
-    @staticmethod
-    @app.route('/artists', methods=['POST'])
-    def create_artist():
-        data = request.get_json()
-        if not data or not data.get('name'):
-            return jsonify({'error': 'Artist name is required'}), 400
-        
-        artist = Artist(name=data['name'])
-        db.session.add(artist)
-        db.session.commit()
-        return jsonify({'id': str(artist.id), 'name': artist.name}), 201
-    
-    @staticmethod
-    @app.route('/artists', methods=['GET'])
-    def get_all_artists():
-        artists = Artist.query.all()
-        return jsonify([{'id': str(artist.id), 'name': artist.name} for artist in artists])
+@app.route('/')
+def index():
+    return '<h1>Music World</h1>'
 
-class SongAPI:
-    @staticmethod
-    @app.route('/songs', methods=['POST'])
-    def create_song():
-        data = request.get_json()
-        if not data or not data.get('title') or not data.get('artist_id'):
-            return jsonify({'error': 'Song title and artist ID are required'}), 400
+app.add_url_rule('/artists', view_func=ArtistAPI.get_all_artists, methods=['GET'])
+app.add_url_rule('/artists', view_func=ArtistAPI.create_artist, methods=['POST'])
 
-        artist = Artist.query.get(data['artist_id'])
-        if not artist:
-            return jsonify({'error': 'Artist not found'}), 404
+app.add_url_rule('/songs', view_func=SongAPI.get_all_songs, methods=['GET'])
+app.add_url_rule('/songs', view_func=SongAPI.create_song, methods=['POST'])
+app.add_url_rule('/songs/<uuid:song_id>', view_func=SongAPI.get_song, methods=['GET'])
+app.add_url_rule('/songs/<uuid:song_id>', view_func=SongAPI.update_song, methods=['PUT'])
 
-        song = Song(
-            title=data['title'],
-            genre=data.get('genre', ''),
-            plays=data.get('plays', 0),
-            likes=data.get('likes', 0),
-            shares=data.get('shares', 0),
-            artist_id=artist.id
-        )
-        db.session.add(song)
-        db.session.commit()
-
-        return jsonify({
-            'id': str(song.id),
-            'title': song.title,
-            'genre': song.genre,
-            'artist': {'id': str(artist.id), 'name': artist.name}
-        }), 201
-
-    @staticmethod
-    @app.route('/songs/<uuid:song_id>', methods=['GET'])
-    def get_song(song_id):
-        song = Song.query.get_or_404(str(song_id))
-        artist = song.artist
-        popularity_score = calculate_popularity(song)  # Use cached value if available
-        return jsonify({
-            'id': str(song.id),
-            'title': song.title,
-            'genre': song.genre,
-            'plays': song.plays,
-            'likes': song.likes,
-            'shares': song.shares,
-            'popularity_score': popularity_score,
-            'artist': {'id': str(artist.id), 'name': artist.name}
-        })
-
-    @staticmethod
-    @app.route('/songs/<uuid:song_id>', methods=['PUT'])
-    def update_song(song_id):
-        data = request.get_json()
-        song = Song.query.get_or_404(str(song_id))
-
-        song.title = data.get('title', song.title)
-        song.genre = data.get('genre', song.genre)
-        song.plays = data.get('plays', song.plays)
-        song.likes = data.get('likes', song.likes)
-        song.shares = data.get('shares', song.shares)
-
-        db.session.commit()
-
-        # Invalidate the cache for this song's popularity score
-        popularity_cache[song.id] = calculate_popularity(song)
-
-        return jsonify({
-            'message': 'Song updated successfully',
-            'popularity_score': popularity_cache[song.id]
-        })
-    
-    @staticmethod
-    @app.route('/songs', methods=['GET'])
-    def get_all_songs():
-        songs = Song.query.all()
-        return jsonify([{
-            'id': str(song.id),
-            'title': song.title,
-            'genre': song.genre,
-            'artist': {
-                'id': str(song.artist.id),
-                'name': song.artist.name
-            }
-        } for song in songs])
+app.add_url_rule('/artists/popularity', view_func=ArtistAPI.get_all_artists_popularity, methods=['GET'])
 
 @app.errorhandler(404)
 def resource_not_found(e):
@@ -122,16 +34,5 @@ def internal_server_error(e):
     app.logger.error(f"Server Error: {e}, Route: {request.url}")
     return jsonify(error='An unexpected error occurred'), 500
 
-def calculate_popularity(song):
-    """Calculate and store the popularity score, using a cache for optimization."""
-    if song.id in popularity_cache:
-        return popularity_cache[song.id]
-
-    # Calculate the popularity score if not already in cache
-    score = (song.plays * 0.5) + (song.likes * 0.3) + (song.shares * 0.2)
-    popularity_cache[song.id] = score
-
-    return score
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5555)
