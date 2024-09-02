@@ -1,42 +1,7 @@
 from flask import request, jsonify
 from database import db
-from models import Artist, Song
-from utils import calculate_popularity, popularity_cache
-
-class ArtistAPI:
-    @staticmethod
-    def create_artist():
-        data = request.get_json()
-        if not data or not data.get('name'):
-            return jsonify({'error': 'Artist name is required'}), 400
-        
-        artist = Artist(name=data['name'])
-        db.session.add(artist)
-        db.session.commit()
-        return jsonify({'id': str(artist.id), 'name': artist.name}), 201
-    
-    @staticmethod
-    def get_all_artists():
-        artists = Artist.query.all()
-        return jsonify([{'id': str(artist.id), 'name': artist.name} for artist in artists])
-    
-    @staticmethod
-    def get_all_artists_popularity():
-        artists = Artist.query.all()
-        popularity_scores = []
-        for artist in artists:
-            songs = Song.query.filter_by(artist_id=artist.id).all()
-            if songs:
-                song_popularity_scores = [calculate_popularity(song) for song in songs]
-                average_popularity = sum(song_popularity_scores) / len(song_popularity_scores)
-            else:
-                average_popularity = 0
-            popularity_scores.append({
-                'artist_id': str(artist.id),
-                'artist_name': artist.name,
-                'popularity_score': average_popularity
-            })
-        return jsonify(popularity_scores)
+from models import Artist, Song, Label
+from utils import popularity_cache, calculate_popularity
 
 class SongAPI:
     @staticmethod
@@ -116,3 +81,14 @@ class SongAPI:
                 'name': song.artist.name
             }
         } for song in songs])
+    
+    @staticmethod
+    def get_all_songs_popularity():
+        songs = Song.query.all()
+        popularity_scores = []
+        for song in songs:
+            popularity_scores.append({
+                'song_id': str(song.id),
+                'popularity_score': calculate_popularity(song)
+            })
+        return jsonify(popularity_scores)
