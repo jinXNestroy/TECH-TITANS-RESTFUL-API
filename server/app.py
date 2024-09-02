@@ -36,10 +36,9 @@ app.add_url_rule('/songs', view_func=SongAPI.create_song, methods=['POST'])
 app.add_url_rule('/songs/<uuid:song_id>', view_func=SongAPI.get_song, methods=['GET'])
 app.add_url_rule('/songs/<uuid:song_id>', view_func=SongAPI.update_song, methods=['PUT'])
 
-
 @app.errorhandler(404)
 def resource_not_found(e):
-    return jsonify(error=str(e)), 404
+    return jsonify({"error": "Sorry, page not found. Please try again"}), 404
 
 @app.errorhandler(500)
 def internal_server_error(e):
